@@ -36,6 +36,7 @@ protobuf = "3.2.0"
 chrono = "0.4.24"
 reqwest = { version = "0.11.16", optional = true }
 error-chain = "0.12.4"
+jpeg-encoder = "0.5.1"
 
 [features]
 default = ["media"]
