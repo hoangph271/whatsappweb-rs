@@ -39,12 +39,9 @@ pub(crate) fn calculate_secret_keys(
     .unwrap();
     let mut secret_key_expanded = [0u8; 80];
 
-    hkdf::extract_and_expand(
-        &hmac::Key::new(&digest::SHA256, &[0u8; 32]),
-        &secret_key,
-        &[],
-        &mut secret_key_expanded,
-    );
+    hkdf::Salt::new(digest::SHA256, &[0u8; 32])
+        .extract(&secret_key)
+        .expand(secret_key_expanded, secret_key_expanded.len());
 
     let signature = [&secret[..32], &secret[64..]].concat();
 
@@ -91,7 +88,7 @@ pub fn verify_and_decrypt_message(
         enc,
         &message_encrypted[32..48],
         &message_encrypted[48..],
-        &mut message
+        &mut message,
     );
     message.truncate(size_without_padding);
     Ok(message)
@@ -109,7 +106,7 @@ pub(crate) fn sign_and_encrypt_message(enc: &[u8], mac: &[u8], message: &[u8]) -
     message_encrypted[32..48].clone_from_slice(&iv);
 
     let signature = hmac::sign(
-        &hmac::SigningKey::new(&digest::SHA256, &mac),
+        &hmac::Key::new(&digest::SHA256, &mac),
         &message_encrypted[32..],
     );
 
@@ -117,23 +114,17 @@ pub(crate) fn sign_and_encrypt_message(enc: &[u8], mac: &[u8], message: &[u8]) -
     message_encrypted
 }
 
-pub(crate) fn sign_challenge(mac: &[u8], challenge: &[u8]) -> hmac::Signature {
-    hmac::sign(&hmac::SigningKey::new(&digest::SHA256, &mac), &challenge)
+pub(crate) fn sign_challenge(mac: &[u8], challenge: &[u8]) -> hmac::Tag {
+    hmac::sign(&hmac::Key::new(&digest::SHA256, &mac), &challenge)
 }
 
 fn derive_media_keys(key: &[u8], media_type: MediaType) -> [u8; 112] {
     let mut media_key_expanded = [0u8; 112];
-    hkdf::extract_and_expand(
-        &hmac::SigningKey::new(&digest::SHA256, &[0u8; 32]),
-        key,
-        match media_type {
-            MediaType::Image => b"WhatsApp Image Keys",
-            MediaType::Video => b"WhatsApp Video Keys",
-            MediaType::Audio => b"WhatsApp Audio Keys",
-            MediaType::Document => b"WhatsApp Document Keys",
-        },
-        &mut media_key_expanded,
-    );
+
+    hkdf::Salt::new(digest::SHA256, &[0u8; 32])
+        .extract(key)
+        .expand(media_key_expanded, media_key_expanded.len());
+
     media_key_expanded
 }
 
@@ -161,7 +152,7 @@ pub fn encrypt_media_message(media_type: MediaType, file: &[u8]) -> (Vec<u8>, Ve
     let hmac_data = [iv, &file_encrypted].concat();
 
     let signature = hmac::sign(
-        &hmac::SigningKey::new(&digest::SHA256, &media_key_expanded[48..80]),
+        &hmac::Key::new(&digest::SHA256, &media_key_expanded[48..80]),
         &hmac_data,
     );
 
@@ -186,7 +177,7 @@ pub fn decrypt_media_message(
     let hmac_data = [&media_key_expanded[0..16], &file_encrypted[..size - 10]].concat();
 
     let signature = hmac::sign(
-        &hmac::SigningKey::new(&digest::SHA256, &media_key_expanded[48..80]),
+        &hmac::Key::new(&digest::SHA256, &media_key_expanded[48..80]),
         &hmac_data,
     );
 
@@ -236,23 +227,22 @@ pub(crate) fn aes_decrypt(key: &[u8], iv: &[u8], input: &[u8], output: &mut [u8]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64;
+    use base64::Engine;
     use node_wire::Node;
     use std::io::stdin;
 
     #[test]
     #[ignore]
     fn decrypt_node_from_browser() {
-        let enc = base64::decode("").unwrap();
-
-        let mac = base64::decode("").unwrap();
+        let enc = Engine::new().decode("").unwrap();
+        let mac = Engine::new().decode("").unwrap();
 
         loop {
             let mut line = String::new();
             stdin().read_line(&mut line).unwrap();
             let len = line.len();
             line.truncate(len - 1);
-            let msg = base64::decode(&line).unwrap();
+            let msg = Engine::new().decode(&line).unwrap();
             let pos = msg.iter().position(|x| x == &b',').unwrap() + 3;
 
             let dec_msg = verify_and_decrypt_message(&enc, &mac, &msg[pos..]).unwrap();

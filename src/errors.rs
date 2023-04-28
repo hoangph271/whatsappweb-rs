@@ -15,7 +15,7 @@ error_chain! {
             Reqwest(reqwest::Error) #[cfg(feature = "media")];
             Json(json::Error);
             Base64(base64::DecodeError);
-            Protobuf(protobuf::ProtobufError);
+            Protobuf(protobuf::Error);
         }
 
         errors {
