@@ -1,14 +1,16 @@
 extern crate base64;
 extern crate json;
 extern crate image;
+extern crate jpeg_encoder;
 
 use std::io::Cursor;
 use std::thread;
 use std::sync::Arc;
 
 use json_protocol::JsonNonNull;
-use image::{GenericImage, RGB};
-use image::jpeg::JPEGEncoder;
+use image::{GenericImage, Rgb};
+use self::jpeg_encoder::{Encoder, ColorType};
+// use image::jpeg::JPEGEncoder;
 use reqwest;
 
 use MediaType;
@@ -26,7 +28,7 @@ pub fn generate_thumbnail_and_get_size(image: &[u8]) -> (Vec<u8>, (u32, u32)) {
 
     let mut thumbnail_writter = Cursor::new(Vec::new());
 
-    JPEGEncoder::new(&mut thumbnail_writter).encode(&thumbnail, thumbnail.width(), thumbnail.height(), RGB(8)).unwrap();
+    Encoder::new(&mut thumbnail_writter, 160).encode(&thumbnail, thumbnail.width(), thumbnail.height(), RGB(8)).unwrap();
 
     (thumbnail_writter.into_inner(), size)
 }
